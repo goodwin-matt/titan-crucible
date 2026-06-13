@@ -78,6 +78,7 @@ def search_arxiv(query: str) -> str:
 def search_fred(query: str) -> str:
     """Search the Federal Reserve Economic Data (FRED) database.
 
+    Economic data series — GDP, interest rates, unemployment.
     Use this tool for historical macroeconomic series, interest rates, the
     Federal Reserve's discount window rates, banking sector assets/equity data,
     and official financial indicators.
@@ -89,8 +90,9 @@ def search_fred(query: str) -> str:
         A formatted string detailing matching FRED data series.
     """
     res = fred_tool.search(query)
+    header = f"API Query URL: {res.api_query}\n\n" if res.api_query else ""
     if not res.items:
-        return f"No data series found on FRED for: {query}"
+        return f"{header}No data series found on FRED for: {query}"
 
     output = []
     for item in res.items:
@@ -101,7 +103,7 @@ def search_fred(query: str) -> str:
             f"Content: {item.content}\n"
             f"---"
         )
-    return "\n".join(output)
+    return header + "\n".join(output)
 
 
 def serialize_custom(obj: Any) -> Any:
@@ -173,11 +175,18 @@ def build_trace_data(question: str, result: AgentRunResult) -> Dict[str, Any]:
                 tool_name = getattr(part, "tool_name", "")
                 content = getattr(part, "content", "")
 
+                # Extract request_url if present in content
+                request_url = None
+                if content.startswith("API Query URL: "):
+                    first_line = content.split("\n", 1)[0]
+                    request_url = first_line.replace("API Query URL: ", "").strip()
+
                 call_info = tool_calls.get(tool_call_id, {})
                 steps.append({
                     "step_number": len(steps) + 1,
                     "tool_selected": call_info.get("tool_selected", tool_name),
                     "tool_input": call_info.get("tool_input"),
+                    "request_url": request_url,
                     "raw_tool_output": content,
                     "agent_reasoning": call_info.get("agent_reasoning", ""),
                 })

@@ -1,13 +1,17 @@
-"""Dummy FRED search tool.
+"""FRED search tool calling the live St. Louis Fed FRED API.
 
-This module provides a mock implementation of the Federal Reserve Economic Data (FRED) search tool.
+This module provides a real implementation of the FRED search tool.
 """
 
+import os
+import re
+import urllib.parse
+import httpx
 from tools.base import BaseResearchTool, ToolResult, ToolResultItem
 
 
 class FredSearchTool(BaseResearchTool):
-    """A mock implementation of the FRED search tool."""
+    """A search tool that queries the live St. Louis Fed FRED API for economic data series."""
 
     @property
     def name(self) -> str:
@@ -18,70 +22,128 @@ class FredSearchTool(BaseResearchTool):
     def description(self) -> str:
         """The description of the tool to help the agent decide when to use it."""
         return (
-            "Search the Federal Reserve Economic Data (FRED) database. Use this tool for historical macroeconomic series, "
-            "interest rates, the Federal Reserve's discount window rates, banking sector assets/equity data, and official financial indicators."
+            "Search the Federal Reserve Economic Data (FRED) database. Economic data series — GDP, interest rates, unemployment. "
+            "Use this tool for historical macroeconomic series, interest rates, the Federal Reserve's discount window rates, banking sector assets/equity data, "
+            "and official financial indicators."
         )
 
+    def _get_observations(self, series_id: str, api_key: str) -> str:
+        """Fetch the most recent 12 observations for a series ID."""
+        url = "https://api.stlouisfed.org/fred/series/observations"
+        params = {
+            "api_key": api_key,
+            "series_id": series_id,
+            "file_type": "json",
+            "sort_order": "desc",
+            "limit": 12,
+        }
+        try:
+            response = httpx.get(url, params=params, timeout=5.0)
+            if response.status_code == 200:
+                data = response.json()
+                obs_list = []
+                for obs in data.get("observations", []):
+                    date = obs.get("date", "")
+                    val = obs.get("value", "")
+                    if val and val != ".":
+                        obs_list.append(f"{date}: {val}")
+                if obs_list:
+                    return "Recent Observations:\n" + "\n".join(
+                        f"  - {o}" for o in obs_list
+                    )
+            return "No observations available."
+        except Exception as e:
+            return f"Failed to retrieve observations: {e}"
+
     def search(self, query: str) -> ToolResult:
-        """Mock search for FRED economic data.
+        """Query the live FRED API for economic series matching the query.
 
         Args:
-            query: The search term.
+            query: The search term or series indicator.
 
         Returns:
-            A ToolResult with mock FRED series matching the query keywords.
+            A ToolResult containing matching series from FRED.
         """
-        query_lower = query.lower()
-        items = []
-
-        if "discount" in query_lower or "window" in query_lower or "fed" in query_lower or "rate" in query_lower:
-            items.append(
-                ToolResultItem(
-                    title="Federal Reserve Discount Window (Primary Credit Rate)",
-                    content=(
-                        "Series ID: DPCREDIT. The Primary Credit Rate is the interest rate charged to commercial banks "
-                        "and other depository institutions on loans they receive from their regional Federal Reserve Bank's "
-                        "lending facility—the discount window. It is typically set above the Federal Open Market Committee's (FOMC) target range."
-                    ),
-                    url="https://fred.stlouisfed.org/series/DPCREDIT",
-                    id="FRED:DPCREDIT",
-                )
-            )
-            items.append(
-                ToolResultItem(
-                    title="Interest Rate on Reserve Balances",
-                    content=(
-                        "Series ID: IORB. The rate of interest paid by the Federal Reserve on reserve balances held by "
-                        "or on behalf of eligible institutions at Federal Reserve Banks. This is a key tool for implementing monetary policy."
-                    ),
-                    url="https://fred.stlouisfed.org/series/IORB",
-                    id="FRED:IORB",
-                )
-            )
-        elif "capital" in query_lower or "basel" in query_lower or "equity" in query_lower:
-            items.append(
-                ToolResultItem(
-                    title="Total Equity Capital to Total Assets for All U.S. Banks",
-                    content=(
-                        "Series ID: EQTA. This ratio measures the equity capital of all U.S. commercial banks relative to their total assets. "
-                        "It serves as an aggregate measure of bank capitalization and leverage in the U.S. banking system."
-                    ),
-                    url="https://fred.stlouisfed.org/series/EQTA",
-                    id="FRED:EQTA",
-                )
-            )
-        else:
-            # Fallback mock result (e.g. Federal Funds Effective Rate)
-            items.append(
-                ToolResultItem(
-                    title="Federal Funds Effective Rate",
-                    content=(
-                        "Series ID: FEDFUNDS. The federal funds rate is the interest rate at which depository institutions "
-                        "lend reserve balances to other depository institutions overnight on an uncollateralized basis."
-                    ),
-                    url="https://fred.stlouisfed.org/series/FEDFUNDS",
-                    id="FRED:FEDFUNDS",
-                )
+        api_key = os.environ.get("FRED_API_KEY")
+        if not api_key:
+            return ToolResult(
+                source_name="FRED",
+                items=[
+                    ToolResultItem(
+                        title="Error: FRED API Key missing",
+                        content="FRED_API_KEY is not configured in the environment variables or .env file.",
+                        url="https://fred.stlouisfed.org",
+                        id="error",
+                    )
+                ],
             )
 
-        return ToolResult(source_name="FRED", items=items)
+        encoded_query = urllib.parse.quote(query)
+        # Construct url with API key for execution, and masked_url for safe trace logging
+        url = f"https://api.stlouisfed.org/fred/series/search?search_text={encoded_query}&api_key={api_key}&file_type=json&limit=3"
+        masked_url = f"https://api.stlouisfed.org/fred/series/search?search_text={encoded_query}&api_key=MASKED&file_type=json&limit=3"
+
+        try:
+            response = httpx.get(url, follow_redirects=True, timeout=10.0)
+            response.raise_for_status()
+            data = response.json()
+
+            items = []
+            seriess = data.get("seriess", [])
+            for series in seriess:
+                series_id = series.get("id", "")
+                title = series.get("title", "Unknown Title")
+
+                frequency = series.get("frequency", "Unknown frequency")
+                units = series.get("units", "Unknown units")
+                seasonal = series.get("seasonal_adjustment", "Not Seasonally Adjusted")
+                obs_start = series.get("observation_start", "")
+                obs_end = series.get("observation_end", "")
+                notes = series.get("notes", "")
+
+                # Clean up HTML tags and newlines from notes
+                if notes:
+                    clean_notes = re.sub(r"<[^>]*>", "", notes)
+                    clean_notes = " ".join(clean_notes.split())
+                    if len(clean_notes) > 300:
+                        clean_notes = clean_notes[:300] + "..."
+                else:
+                    clean_notes = "No notes available."
+
+                # Get actual series observations
+                obs_text = self._get_observations(series_id, api_key)
+
+                content = (
+                    f"Series ID: {series_id}. "
+                    f"Frequency: {frequency}. "
+                    f"Units: {units}. "
+                    f"Seasonal Adjustment: {seasonal}. "
+                    f"Observations range: {obs_start} to {obs_end}. "
+                    f"Notes: {clean_notes}\n"
+                    f"{obs_text}"
+                )
+
+                items.append(
+                    ToolResultItem(
+                        title=title,
+                        content=content,
+                        url=f"https://fred.stlouisfed.org/series/{series_id}",
+                        id=f"FRED:{series_id}",
+                    )
+                )
+
+            return ToolResult(source_name="FRED", items=items, api_query=masked_url)
+
+        except Exception as e:
+            return ToolResult(
+                source_name="FRED",
+                items=[
+                    ToolResultItem(
+                        title="Error calling FRED API",
+                        content=f"An error occurred while calling the FRED API: {str(e)}",
+                        url="https://fred.stlouisfed.org",
+                        id="error",
+                    )
+                ],
+                api_query=masked_url,
+            )

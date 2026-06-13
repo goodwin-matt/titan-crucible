@@ -4,7 +4,7 @@ An AI research agent designed for financial and regulatory search, built using *
 
 ## Architecture Overview
 
-The main orchestration approach I used was a simple ReAct agent. The main reason I did this is to keep things simple and give the agent more 
+The main orchestration approach I used was a simple ReAct agent. The main reason I did this was to keep things simple and give the agent more 
 autonomy to choose tools and make decisions. I would evaluate this agent more fully and depending on its performance I would then consider 
 using more complex agent orchestration approaches.
 

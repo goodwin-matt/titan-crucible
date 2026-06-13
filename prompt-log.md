@@ -332,6 +332,51 @@ To address this, I have updated the FRED search tool to retrieve and attach actu
 3. **Multi-Turn Reasoning**: This allows the model to instantly see the current rate (e.g., 4.3% in May 2026) and compare it against the rate a year ago (e.g., 4.1% in June 2025) to describe the change in a single run.
 4. **Mocked Testing**: Updated the unit tests in [test_tools.py](file:///Users/goodwin/Matt/SideProjects/titan/tests/test_tools.py) to use a unified `mock_fred_get` handler for both `series/search` and `series/observations` endpoints.
 
+## Interaction 26 - 2026-06-13T07:21:23-06:00
+### User Request
+Can you add these questions to the eval_data.json: 
+#    Question    Type
+1    What is the Federal Reserve's discount window and how does it work?    Single-source factual
+2    What are the Basel III capital requirements for banks?    Single-source factual
+3    What recent academic research exists on using machine learning for credit risk assessment?    Academic search
+4    How did the Federal Reserve's monetary policy response to the 2008 financial crisis differ from its response to COVID-19?    Multi-source synthesis
+5    What is the current US unemployment rate and how has it changed over the past year?    Data retrieval (FRED)
+6    Explain the relationship between yield curve inversions and recessions. Are there recent academic papers on this topic?    Cross-tool synthesis
+7    What is the best restaurant in New York City?    Out-of-scope (should refuse or caveat)
+8    What are the implications of quantum computing for banking encryption?    Speculative / emerging
+
+### Response
+I have updated [eval_data.json](file:///Users/goodwin/Matt/SideProjects/titan/evaluation/eval_data.json) to contain the eight specified benchmark questions along with their respective types, structured as a clean list of test cases. All existing tests pass successfully.
+
+## Interaction 27 - 2026-06-13T07:23:46-06:00
+### User Request
+Please add a script in evaluation that runs each question and stores the question and response from the agent in a .md file
+
+### Response
+I have created the evaluation runner script [run_evals.py](file:///Users/goodwin/Matt/SideProjects/titan/evaluation/run_evals.py) which iterates through all the benchmark questions in [eval_data.json](file:///Users/goodwin/Matt/SideProjects/titan/evaluation/eval_data.json), runs them synchronously, and aggregates the results into a clean, detailed Markdown file at [eval_results.md](file:///Users/goodwin/Matt/SideProjects/titan/evaluation/eval_results.md). Additionally, I added tests for loading and executing evaluation cases in [test_evaluation.py](file:///Users/goodwin/Matt/SideProjects/titan/tests/test_evaluation.py).
+
+## Interaction 28 - 2026-06-13T07:27:55-06:00
+### User Request
+Lets also add a wikipedia tool. Here is the api documentation: https://en.wikipedia.org/wiki/Special:RestSandbox/wmf-restbase
+
+### Response
+I have implemented the live Wikipedia search tool:
+1. **Tool Creation**: Created [wikipedia.py](file:///Users/goodwin/Matt/SideProjects/titan/tools/wikipedia.py) containing `WikipediaSearchTool`. It uses the MediaWiki Search API to locate articles and the RESTBase Page Summary API to fetch clean article extracts.
+2. **Package Expose**: Exported `WikipediaSearchTool` in [__init__.py](file:///Users/goodwin/Matt/SideProjects/titan/tools/__init__.py).
+3. **Agent Integration**: Updated [agent.py](file:///Users/goodwin/Matt/SideProjects/titan/agent.py) to register the new `search_wikipedia` tool and updated the system prompt to guide the model on using Wikipedia.
+4. **Testing Suite**: Added tests for `WikipediaSearchTool` and its wrapper in [test_tools.py](file:///Users/goodwin/Matt/SideProjects/titan/tests/test_tools.py) and [test_agent.py](file:///Users/goodwin/Matt/SideProjects/titan/tests/test_agent.py) respectively, ensuring 100% offline coverage. All tests pass successfully.
+
+## Interaction 29 - 2026-06-13T07:29:50-06:00
+### User Request
+Directly addresses the question asked
+Cites its sources with enough detail to verify (article titles, paper IDs, URLs)
+Distinguishes between information retrieved from tools and any reasoning or inference the model adds
+
+### Response
+I have updated the system prompt in [agent.py](file:///Users/goodwin/Matt/SideProjects/titan/agent.py) to explicitly include these three synthesis rules, ensuring the model directly addresses the question, provides detailed verifiable citations (titles, IDs, URLs), and explicitly separates retrieved facts from its own logical deductions.
+
+
+
 
 
 

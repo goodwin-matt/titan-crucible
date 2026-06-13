@@ -1,7 +1,7 @@
 """Titan Research Agent.
 
 An AI-powered agent designed for financial and regulatory research using PydanticAI
-and Groq. It supports searching academic papers via arXiv and macroeconomic series
+and Groq. It supports searching wikipedia,academic papers via arXiv and macroeconomic series
 via FRED, synthesizing a final response with structured citations.
 """
 
@@ -15,24 +15,31 @@ from dotenv import load_dotenv
 from pydantic import BaseModel
 from pydantic_ai import Agent, ModelSettings
 from pydantic_ai.run import AgentRunResult
-from tools import ArXivSearchTool, FredSearchTool
+from tools import ArXivSearchTool, FredSearchTool, WikipediaSearchTool
 
 # Load environment variables from .env
 load_dotenv()
 
-# Instantiate dummy tools
+# Instantiate tools
 arxiv_tool = ArXivSearchTool()
 fred_tool = FredSearchTool()
+wikipedia_tool = WikipediaSearchTool()
 
 # Define the research agent
 agent = Agent(
-    # "groq:llama-3.1-8b-instant",
     "groq:meta-llama/llama-4-scout-17b-16e-instruct",
     model_settings=ModelSettings(temperature=0.0),
     system_prompt=(
         "You are an expert financial and regulatory research assistant.\n"
-        "Your task is to answer user questions using information from the arXiv (academic papers) and FRED (Federal Reserve Economic Data) search tools.\n\n"
-        "Use the search tools to retrieve accurate facts. Synthesize the findings into a clear response, providing inline citations and a structured sources list at the end."
+        "Your task is to answer user questions using information from the arXiv (academic papers), FRED (Federal Reserve Economic Data), and Wikipedia search tools.\n\n"
+        "Guidance for tools:\n"
+        "- arXiv: Search academic papers. Use this for academic research, theoretical models, credit risk papers, and detailed regulatory standards like Basel III.\n"
+        "- FRED: Economic data series — GDP, interest rates, unemployment. Use this for historical macroeconomic series, interest rates, Fed discount window rates, banking sector assets/equity, and financial indicators.\n"
+        "- Wikipedia: Use this tool for general knowledge, histories, quick summaries, biographies, overview of concepts, and background context.\n\n"
+        "To produce a high-quality answer, you MUST adhere to the following rules:\n"
+        "1. Directly address the question asked.\n"
+        "2. Cite your sources clearly and with enough detail to verify. Include titles, IDs/series IDs, and URLs.\n"
+        "3. Explicitly distinguish between information retrieved from tools and any reasoning, synthesis, or inference that you (the model) have added."
     ),
 )
 
@@ -93,6 +100,36 @@ def search_fred(query: str) -> str:
     header = f"API Query URL: {res.api_query}\n\n" if res.api_query else ""
     if not res.items:
         return f"{header}No data series found on FRED for: {query}"
+
+    output = []
+    for item in res.items:
+        output.append(
+            f"Title: {item.title}\n"
+            f"ID: {item.id}\n"
+            f"URL: {item.url}\n"
+            f"Content: {item.content}\n"
+            f"---"
+        )
+    return header + "\n".join(output)
+
+
+@agent.tool_plain
+def search_wikipedia(query: str) -> str:
+    """Search Wikipedia for general knowledge, histories, summaries, and context.
+
+    Use this tool for general knowledge, quick summaries, biographies,
+    overview of concepts, and background context.
+
+    Args:
+        query: The search term or query.
+
+    Returns:
+        A formatted string detailing matching Wikipedia pages and their extracts.
+    """
+    res = wikipedia_tool.search(query)
+    header = f"API Query URL: {res.api_query}\n\n" if res.api_query else ""
+    if not res.items:
+        return f"{header}No Wikipedia pages found for: {query}"
 
     output = []
     for item in res.items:

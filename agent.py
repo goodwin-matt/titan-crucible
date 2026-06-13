@@ -5,11 +5,16 @@ and Groq. It supports searching academic papers via arXiv and macroeconomic seri
 via FRED, synthesizing a final response with structured citations.
 """
 
+import datetime
+import json
 import os
 import sys
-from typing import Optional
+from dataclasses import is_dataclass
+from typing import Any, Dict, List, Optional
 from dotenv import load_dotenv
+from pydantic import BaseModel
 from pydantic_ai import Agent, ModelSettings
+from pydantic_ai.run import AgentRunResult
 from tools import ArXivSearchTool, FredSearchTool
 
 # Load environment variables from .env
@@ -21,7 +26,8 @@ fred_tool = FredSearchTool()
 
 # Define the research agent
 agent = Agent(
-    "groq:llama-3.1-8b-instant",
+    # "groq:llama-3.1-8b-instant",
+    "groq:meta-llama/llama-4-scout-17b-16e-instruct",
     model_settings=ModelSettings(temperature=0.0),
     system_prompt=(
         "You are an expert financial and regulatory research assistant.\n"
@@ -35,18 +41,26 @@ agent = Agent(
 def search_arxiv(query: str) -> str:
     """Search academic papers on arXiv.
 
-    Use this tool for academic research, theoretical models, credit risk papers,
-    and detailed regulatory standards like Basel III.
+    Supports simple search terms or structured queries using field prefixes:
+    - ti: Title (e.g. ti:"credit risk")
+    - abs: Abstract (e.g. abs:"machine learning")
+    - cat: Subject Category (e.g. cat:q-fin.RM for Risk Management)
+    - au: Author (e.g. au:delbaen)
+    - all: All fields (default if no prefix is provided)
+
+    Combine queries with capitalized boolean operators (AND, OR, ANDNOT).
+    Example: ti:"credit risk" AND cat:q-fin.RM
 
     Args:
-        query: The search term or query.
+        query: The search term or structured query.
 
     Returns:
         A formatted string detailing matching papers and their contents.
     """
     res = arxiv_tool.search(query)
+    header = f"API Query URL: {res.api_query}\n\n" if res.api_query else ""
     if not res.items:
-        return f"No academic papers found on arXiv for: {query}"
+        return f"{header}No academic papers found on arXiv for: {query}"
 
     output = []
     for item in res.items:
@@ -57,7 +71,7 @@ def search_arxiv(query: str) -> str:
             f"Content: {item.content}\n"
             f"---"
         )
-    return "\n".join(output)
+    return header + "\n".join(output)
 
 
 @agent.tool_plain
@@ -88,6 +102,94 @@ def search_fred(query: str) -> str:
             f"---"
         )
     return "\n".join(output)
+
+
+def serialize_custom(obj: Any) -> Any:
+    """Recursively serialize objects including datetime, Pydantic models, and dataclasses.
+
+    Args:
+        obj: The object to serialize.
+
+    Returns:
+        A JSON-serializable representation of the object.
+    """
+    if isinstance(obj, (datetime.datetime, datetime.date)):
+        return obj.isoformat()
+    if isinstance(obj, BaseModel):
+        return obj.model_dump(mode="json")
+    if is_dataclass(obj):
+        return {
+            k: serialize_custom(v)
+            for k, v in obj.__dict__.items()
+            if not k.startswith("_")
+        }
+    if isinstance(obj, dict):
+        return {k: serialize_custom(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [serialize_custom(v) for v in obj]
+    return obj
+
+
+def build_trace_data(question: str, result: AgentRunResult) -> Dict[str, Any]:
+    """Build a structured trace dictionary from the agent run result.
+
+    Args:
+        question: The user's query question.
+        result: The PydanticAI agent run result object.
+
+    Returns:
+        A dictionary containing steps, final synthesis, and raw conversation messages.
+    """
+    steps: List[Dict[str, Any]] = []
+    tool_calls: Dict[str, Dict[str, Any]] = {}
+    current_reasoning = ""
+    messages = result.all_messages()
+
+    for msg in messages:
+        parts = getattr(msg, "parts", [])
+        for part in parts:
+            part_kind = getattr(part, "part_kind", "")
+            if part_kind == "text":
+                current_reasoning = getattr(part, "content", "")
+            elif part_kind == "tool-call":
+                tool_call_id = getattr(part, "tool_call_id", "")
+                tool_name = getattr(part, "tool_name", "")
+                args = getattr(part, "args", None)
+
+                parsed_args = args
+                if isinstance(args, str):
+                    try:
+                        parsed_args = json.loads(args)
+                    except Exception:
+                        pass
+
+                tool_calls[tool_call_id] = {
+                    "tool_selected": tool_name,
+                    "tool_input": parsed_args,
+                    "agent_reasoning": current_reasoning,
+                }
+            elif part_kind == "tool-return":
+                tool_call_id = getattr(part, "tool_call_id", "")
+                tool_name = getattr(part, "tool_name", "")
+                content = getattr(part, "content", "")
+
+                call_info = tool_calls.get(tool_call_id, {})
+                steps.append({
+                    "step_number": len(steps) + 1,
+                    "tool_selected": call_info.get("tool_selected", tool_name),
+                    "tool_input": call_info.get("tool_input"),
+                    "raw_tool_output": content,
+                    "agent_reasoning": call_info.get("agent_reasoning", ""),
+                })
+
+    serialized_messages = [serialize_custom(msg) for msg in messages]
+
+    return {
+        "question": question,
+        "steps": steps,
+        "final_synthesis": result.output,
+        "messages": serialized_messages,
+    }
 
 
 def run_agent(question: str) -> str:
@@ -124,11 +226,12 @@ def main() -> None:
 
     try:
         result = agent.run_sync(question)
-        print("=== FINAL OUTPUT ===")
         print(result.output)
-        print("\n=== CONVERSATION HISTORY ===")
-        for msg in result.all_messages():
-            print(msg)
+
+        # Log trace to structured JSON file
+        trace_data = build_trace_data(question, result)
+        with open("run_trace.json", "w", encoding="utf-8") as f:
+            json.dump(trace_data, f, indent=2, ensure_ascii=False)
     except Exception as e:
         print(f"Error executing research agent: {e}", file=sys.stderr)
         sys.exit(1)

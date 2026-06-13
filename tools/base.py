@@ -5,7 +5,7 @@ research tools must implement to ensure a consistent interface.
 """
 
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -34,6 +34,9 @@ class ToolResult(BaseModel):
     )
     items: List[ToolResultItem] = Field(
         default_factory=list, description="List of search result items"
+    )
+    api_query: Optional[str] = Field(
+        None, description="The actual API query or URL used for the search"
     )
 
 

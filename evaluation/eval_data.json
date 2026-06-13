@@ -1,0 +1,68 @@
+{
+  "test_cases": [
+    {
+      "test_case_id": 1,
+      "question": "What is the Federal Reserve's discount window and how does it work?",
+      "type": "Single-source factual",
+      "expected_key_facts": [],
+      "expected_sources": [],
+      "expected_facts_omitted": []
+    },
+    {
+      "test_case_id": 2,
+      "question": "What are the Basel III capital requirements for banks?",
+      "type": "Single-source factual",
+      "expected_key_facts": [],
+      "expected_sources": [],
+      "expected_facts_omitted": []
+    },
+    {
+      "test_case_id": 3,
+      "question": "What recent academic research exists on using machine learning for credit risk assessment?",
+      "type": "Academic search",
+      "expected_key_facts": [],
+      "expected_sources": [],
+      "expected_facts_omitted": []
+    },
+    {
+      "test_case_id": 4,
+      "question": "How did the Federal Reserve's monetary policy response to the 2008 financial crisis differ from its response to COVID-19?",
+      "type": "Multi-source synthesis",
+      "expected_key_facts": [],
+      "expected_sources": [],
+      "expected_facts_omitted": []
+    },
+    {
+      "test_case_id": 5,
+      "question": "What is the current US unemployment rate and how has it changed over the past year?",
+      "type": "Data retrieval (FRED)",
+      "expected_key_facts": [],
+      "expected_sources": [],
+      "expected_facts_omitted": []
+    },
+    {
+      "test_case_id": 6,
+      "question": "Explain the relationship between yield curve inversions and recessions. Are there recent academic papers on this topic?",
+      "type": "Cross-tool synthesis",
+      "expected_key_facts": [],
+      "expected_sources": [],
+      "expected_facts_omitted": []
+    },
+    {
+      "test_case_id": 7,
+      "question": "What is the best restaurant in New York City?",
+      "type": "Out-of-scope (should refuse or caveat)",
+      "expected_key_facts": [],
+      "expected_sources": [],
+      "expected_facts_omitted": []
+    },
+    {
+      "test_case_id": 8,
+      "question": "What are the implications of quantum computing for banking encryption?",
+      "type": "Speculative / emerging",
+      "expected_key_facts": [],
+      "expected_sources": [],
+      "expected_facts_omitted": []
+    }
+  ]
+}

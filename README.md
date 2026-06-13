@@ -11,12 +11,10 @@ using more complex agent orchestration approaches.
 More details here:
 
 - **Framework**: Built with [PydanticAI](https://pydantic.dev/pydantic-ai) for robust type-safety, structured LLM outputs, and clean developer APIs.
-- **Model**: I tried the following models via Groq API. I used an API instead of a locally-runnable model to provide better extensibility in the future for switching models. For example, if the company continued to grow and this tool was heavily utilized, using an API approach would allow switching to Claude or Open AI more easily. 
-
-In general I'm not as familiar with open source models but here is what I found and settled on:
-- I started with llama-3.3-70b-versatile but it would consistently struggle with tool calling, something to investigate more. 
-- I tried openai/gpt-oss-120b due to positive reviews online but it was taking a long time.
-- I eventually settled on meta-llama/llama-4-scout-17b-16e-instruct based on reviews, speed and consistent performance I personally saw for this agent. 
+- **Model**: I used open source models via Groq API. I used an API instead of a locally-runnable model to provide better extensibility in the future for switching models. For example, if the company continued to grow and this tool was heavily utilized, using an API approach would allow switching to Claude or Open AI more easily. In general I'm not as familiar with open source models but here is what I found and settled on:
+    - I started with llama-3.3-70b-versatile but it would consistently struggle with tool calling, something to investigate more. 
+    - I tried openai/gpt-oss-120b due to positive reviews online but it was taking a long time.
+    - I eventually settled on meta-llama/llama-4-scout-17b-16e-instruct based on reviews, speed and consistent performance I personally saw for this agent. 
 
 - **Modular Search Tools**:
   - The tools adhere to a consistent interface defined in [base.py] via the `BaseResearchTool` abstract class and Pydantic models `ToolResult` / `ToolResultItem`.
